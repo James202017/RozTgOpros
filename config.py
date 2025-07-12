@@ -1,0 +1,3 @@
+
+BOT_TOKEN = "7956903101:AAEcFEvl01HlkfD-cYu4-9eqFPW6PIRdhLQ"
+ADMIN_ID = 464251135  # ID администратора
