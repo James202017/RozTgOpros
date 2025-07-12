@@ -1,136 +1,163 @@
 
-from aiogram import Bot, Dispatcher, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+import logging
+import asyncio
+import os
+from aiogram import Bot, Dispatcher, F
+from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.filters import Command, StateFilter
-import asyncio
-import logging
-from config import BOT_TOKEN, ADMIN_ID
-from google_sheets import append_to_sheet
-from datetime import datetime
+from aiogram.enums.parse_mode import ParseMode
+from aiogram.filters import CommandStart
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from dotenv import load_dotenv
+from google_sheets import append_row
 
-bot = Bot(token=BOT_TOKEN)
+load_dotenv()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_ID = int(os.getenv("ADMIN_ID", 0))
+
+bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher()
+
 logging.basicConfig(level=logging.INFO)
 
-class Survey(StatesGroup):
+# Состояния
+class Form(StatesGroup):
     housing = State()
-    satisfied = State()
-    property_type = State()
+    improve = State()
+    type = State()
     city = State()
     budget = State()
-    search_status = State()
+    search = State()
     mortgage = State()
-    purchase_time = State()
+    time = State()
     name = State()
     phone = State()
-    contact_method = State()
-    preferred_time = State()
+    contact = State()
+    callback_time = State()
     sos = State()
 
-user_data = {}
+# Кнопки
+yes_no_kb = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text="Да")], [KeyboardButton(text="Нет")]],
+    resize_keyboard=True
+)
 
-@dp.message(Command("start"))
-async def cmd_start(message: types.Message, state: FSMContext):
-    await message.answer(
-        "Добро пожаловать в конкурс!
-Где вы сейчас живете?",
-        reply_markup=ReplyKeyboardMarkup(keyboard=[
-            [KeyboardButton(text="Своя квартира")],
-            [KeyboardButton(text="Съёмная квартира")],
-            [KeyboardButton(text="С родителями")],
-            [KeyboardButton(text="С парнем/девушкой")],
-            [KeyboardButton(text="Общежитие")],
-            [KeyboardButton(text="Другое")]
-        ], resize_keyboard=True)
-    )
-    await state.set_state(Survey.housing)
+contact_kb = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text="Позвонить")],
+        [KeyboardButton(text="Написать в мессенджер")],
+        [KeyboardButton(text="Email")]
+    ],
+    resize_keyboard=True
+)
 
-@dp.message(StateFilter(Survey.housing))
-async def step_housing(message: types.Message, state: FSMContext):
+@dp.message(CommandStart())
+async def cmd_start(message: Message, state: FSMContext):
+    await message.answer("Привет! Давай подберём тебе идеальную недвижимость. Отвечай честно, и получишь подарок 🎁")
+    await message.answer("1. Где ты живёшь сейчас? (своя, съёмная, с родителями, с девушкой/парнем и т.д.)")
+    await state.set_state(Form.housing)
+
+@dp.message(Form.housing)
+async def step_housing(message: Message, state: FSMContext):
     await state.update_data(housing=message.text)
-    await message.answer("Хотите ли вы улучшить жилищные условия?", reply_markup=ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text="Да")], [KeyboardButton(text="Нет")]], resize_keyboard=True))
-    await state.set_state(Survey.satisfied)
+    await message.answer("2. Хотели бы улучшить условия?")
+    await state.set_state(Form.improve)
 
-@dp.message(StateFilter(Survey.satisfied))
-async def step_satisfied(message: types.Message, state: FSMContext):
-    await state.update_data(satisfied=message.text)
-    await message.answer("Какую недвижимость вы рассматриваете? (Дом, Квартира и т.д.)")
-    await state.set_state(Survey.property_type)
+@dp.message(Form.improve)
+async def step_improve(message: Message, state: FSMContext):
+    await state.update_data(improve=message.text)
+    await message.answer("3. Какой тип недвижимости интересует? (Квартира, Дом, Участок...)")
+    await state.set_state(Form.type)
 
-@dp.message(StateFilter(Survey.property_type))
-async def step_type(message: types.Message, state: FSMContext):
-    await state.update_data(property_type=message.text)
-    await message.answer("В каком городе или регионе хотите недвижимость?")
-    await state.set_state(Survey.city)
+@dp.message(Form.type)
+async def step_type(message: Message, state: FSMContext):
+    await state.update_data(type=message.text)
+    await message.answer("4. В каком городе/регионе?")
+    await state.set_state(Form.city)
 
-@dp.message(StateFilter(Survey.city))
-async def step_city(message: types.Message, state: FSMContext):
+@dp.message(Form.city)
+async def step_city(message: Message, state: FSMContext):
     await state.update_data(city=message.text)
-    await message.answer("Какой у вас бюджет?")
-    await state.set_state(Survey.budget)
+    await message.answer("5. Какой бюджет?")
+    await state.set_state(Form.budget)
 
-@dp.message(StateFilter(Survey.budget))
-async def step_budget(message: types.Message, state: FSMContext):
+@dp.message(Form.budget)
+async def step_budget(message: Message, state: FSMContext):
     await state.update_data(budget=message.text)
-    await message.answer("Вы уже подбираете или только планируете?")
-    await state.set_state(Survey.search_status)
+    await message.answer("6. Уже ищете жильё? (Да, Иногда, Пока думаю)")
+    await state.set_state(Form.search)
 
-@dp.message(StateFilter(Survey.search_status))
-async def step_search_status(message: types.Message, state: FSMContext):
-    await state.update_data(search_status=message.text)
-    await message.answer("Рассматриваете ипотеку?")
-    await state.set_state(Survey.mortgage)
+@dp.message(Form.search)
+async def step_search(message: Message, state: FSMContext):
+    await state.update_data(search=message.text)
+    await message.answer("7. Рассматриваете ипотеку?")
+    await state.set_state(Form.mortgage)
 
-@dp.message(StateFilter(Survey.mortgage))
-async def step_mortgage(message: types.Message, state: FSMContext):
+@dp.message(Form.mortgage)
+async def step_mortgage(message: Message, state: FSMContext):
     await state.update_data(mortgage=message.text)
-    await message.answer("Когда планируете покупку?")
-    await state.set_state(Survey.purchase_time)
+    await message.answer("8. Когда планируете покупку?")
+    await state.set_state(Form.time)
 
-@dp.message(StateFilter(Survey.purchase_time))
-async def step_purchase_time(message: types.Message, state: FSMContext):
-    await state.update_data(purchase_time=message.text)
-    await message.answer("Ваше ФИО:")
-    await state.set_state(Survey.name)
+@dp.message(Form.time)
+async def step_time(message: Message, state: FSMContext):
+    await state.update_data(time=message.text)
+    await message.answer("9. Ваше ФИО:")
+    await state.set_state(Form.name)
 
-@dp.message(StateFilter(Survey.name))
-async def step_name(message: types.Message, state: FSMContext):
+@dp.message(Form.name)
+async def step_name(message: Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer("Телефон для связи:")
-    await state.set_state(Survey.phone)
+    await message.answer("10. Ваш телефон:")
+    await state.set_state(Form.phone)
 
-@dp.message(StateFilter(Survey.phone))
-async def step_phone(message: types.Message, state: FSMContext):
+@dp.message(Form.phone)
+async def step_phone(message: Message, state: FSMContext):
     await state.update_data(phone=message.text)
-    await message.answer("Как предпочитаете связаться? (Звонок, Telegram, WhatsApp и т.д.)")
-    await state.set_state(Survey.contact_method)
+    await message.answer("11. Как с вами лучше связаться?", reply_markup=contact_kb)
+    await state.set_state(Form.contact)
 
-@dp.message(StateFilter(Survey.contact_method))
-async def step_contact_method(message: types.Message, state: FSMContext):
-    await state.update_data(contact_method=message.text)
-    await message.answer("Когда удобно связаться? (день и время)")
-    await state.set_state(Survey.preferred_time)
+@dp.message(Form.contact)
+async def step_contact(message: Message, state: FSMContext):
+    await state.update_data(contact=message.text)
+    await message.answer("12. Когда вам удобно связаться?")
+    await state.set_state(Form.callback_time)
 
-@dp.message(StateFilter(Survey.preferred_time))
-async def step_time(message: types.Message, state: FSMContext):
-    await state.update_data(preferred_time=message.text)
+@dp.message(Form.callback_time)
+async def step_callback_time(message: Message, state: FSMContext):
+    await state.update_data(callback_time=message.text)
+    await message.answer("Если вам нужно связаться СЕЙЧАС — напишите SOS, и мы свяжемся немедленно!", reply_markup=ReplyKeyboardMarkup(
+        keyboard=[[KeyboardButton(text="SOS")], [KeyboardButton(text="Нет, всё ок")]],
+        resize_keyboard=True
+    ))
+    await state.set_state(Form.sos)
+
+@dp.message(Form.sos)
+async def step_sos(message: Message, state: FSMContext):
     data = await state.get_data()
-    append_to_sheet([
-        data.get("name"), data.get("phone"), message.from_user.username,
-        data.get("housing"), data.get("satisfied"), data.get("property_type"),
-        data.get("city"), data.get("budget"), data.get("search_status"),
-        data.get("mortgage"), data.get("purchase_time"), data.get("contact_method"),
-        data.get("preferred_time"), "Нет", datetime.now().strftime("%Y-%m-%d %H:%M")
-    ])
-    await message.answer("Спасибо! Если хотите срочную помощь — нажмите /sos")
+    data["sos"] = message.text
 
-@dp.message(Command("sos"))
-async def sos_command(message: types.Message, state: FSMContext):
-    data = await state.get_data()
-    await state.update_data(sos="Да")
-    await message.answer("С вами свяжется специалист как можно скорее.")
-    await bot.send_message(ADMIN_ID, f"‼️ SOS от {message.from_user.full_name} (@{message.from_user.username})
-Номер: {data.get('phone')}")
+    # Сохраняем в Google Sheets
+    row = [
+        message.date.isoformat(), data.get("name"), data.get("phone"),
+        data.get("housing"), data.get("improve"), data.get("type"),
+        data.get("city"), data.get("budget"), data.get("search"),
+        data.get("mortgage"), data.get("time"), data.get("contact"),
+        data.get("callback_time"), data.get("sos")
+    ]
+    append_row(row)
+
+    await message.answer("Спасибо! Мы свяжемся с вами в указанное время.")
+    if data["sos"].lower() == "sos":
+        await message.answer("🔔 Специалист свяжется с вами в ближайшее время!")
+        await bot.send_message(ADMIN_ID, f"🚨 SOS от {data.get('name')} {data.get('phone')}")
+
+    await state.clear()
+
+async def main():
+    await dp.start_polling(bot)
+
+if __name__ == '__main__':
+    asyncio.run(main())

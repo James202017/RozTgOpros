@@ -1,15 +1,17 @@
 
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import os
 
-# Замените 'your-creds.json' на путь к вашему JSON
-SHEET_ID = "ВАШ_ID_ТАБЛИЦЫ"
-RANGE = "Лист1!A1"
+def get_sheet():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds_path = os.getenv("GSHEET_CREDENTIALS_JSON")
+    sheet_name = os.getenv("GSHEET_SHEET_NAME")
+    credentials = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
+    client = gspread.authorize(credentials)
+    sheet = client.open(sheet_name).sheet1
+    return sheet
 
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("your-creds.json", scope)
-client = gspread.authorize(creds)
-sheet = client.open_by_key(SHEET_ID).sheet1
-
-def append_to_sheet(row):
-    sheet.append_row(row)
+def append_row(data):
+    sheet = get_sheet()
+    sheet.append_row(data)
