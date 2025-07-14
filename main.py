@@ -48,7 +48,9 @@ contact_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="Позвонить")],
         [KeyboardButton(text="Написать в мессенджер")],
-        [KeyboardButton(text="Email")]
+        [KeyboardButton(text="Email")],
+        [KeyboardButton(text="Подарок")],
+        [KeyboardButton(text="Назад")]
     ],
     resize_keyboard=True
 )
@@ -80,7 +82,7 @@ async def step_type(message: Message, state: FSMContext):
 @dp.message(Form.city)
 async def step_city(message: Message, state: FSMContext):
     await state.update_data(city=message.text)
-    await message.answer("5. Какой бюджет?")
+    await message.answer("5. Какой бюджет? (Есть немного денег, Материнский капитал за одного и больше двух, Есть деньги с продажи, Распиши более подробно для точного подбора специалистом)")
     await state.set_state(Form.budget)
 
 @dp.message(Form.budget)
@@ -122,7 +124,7 @@ async def step_phone(message: Message, state: FSMContext):
 @dp.message(Form.contact)
 async def step_contact(message: Message, state: FSMContext):
     await state.update_data(contact=message.text)
-    await message.answer("12. Когда вам удобно связаться?")
+    await message.answer("12. Когда с вами удобно связаться?")
     await state.set_state(Form.callback_time)
 
 @dp.message(Form.callback_time)
